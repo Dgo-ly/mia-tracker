@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta name="robots" content="noindex, nofollow">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Трекер закрывающих документов МИА.РФ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+<style>
+/* Layout: summary band → clinic scoreboard → changes (day/week) → supplier explorer. Ledger-like, dense, scannable. */
+:root {
+  /* МИА.РФ guideline: Carbon Black, Solid Gray, Pure White, Bright Cian; tints by opacity. Type: Montserrat (brand fallback), golden-ratio scale 16/26/42. */
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --panel: #f3f3f3;
+  --ink: #0c0c0c;
+  --muted: rgba(12, 12, 12, 0.6);
+  --line: #dcdcdc;
+  --accent: #0068ff;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(0, 104, 255, 0.12);
+  --accent-mid: rgba(0, 104, 255, 0.4);
+  --pill-work: rgba(0, 104, 255, 0.14);
+  --pill-line: #b5b5b5;
+  --ok: #0068ff; --ok-soft: rgba(0, 104, 255, 0.12);
+  --warn: #0c0c0c; --warn-soft: #dcdcdc;
+  --bad: #ffffff; --bad-soft: #0068ff;
+  --font-display: "Montserrat", "Segoe UI", Arial, sans-serif;
+  --font-body: "Montserrat", "Segoe UI", Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0c0c; --surface: #151515; --panel: #1c1c1c; --ink: #ffffff; --muted: rgba(255,255,255,0.75); --line: #3a3a3a;
+    --accent-soft: rgba(0, 104, 255, 0.3); --accent-mid: rgba(0, 104, 255, 0.55); --pill-work: rgba(0, 104, 255, 0.42); --pill-line: #8a8a8a;
+    --ok-soft: rgba(0, 104, 255, 0.22); --warn: #ffffff; --warn-soft: #2e2e2e; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c0c0c; --surface: #151515; --panel: #1c1c1c; --ink: #ffffff; --muted: rgba(255,255,255,0.75); --line: #3a3a3a;
+  --accent-soft: rgba(0, 104, 255, 0.3); --accent-mid: rgba(0, 104, 255, 0.55); --pill-work: rgba(0, 104, 255, 0.42); --pill-line: #8a8a8a;
+  --ok-soft: rgba(0, 104, 255, 0.22); --warn: #ffffff; --warn-soft: #2e2e2e; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font-body); }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 24px 20px 56px; display: grid; gap: 28px; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; font-weight: 500; }
+h1 { font-size: 42px; font-weight: 400; line-height: 1.05; }
+h2 { font-size: 26px; font-weight: 400; }
+.sub { color: var(--muted); font-size: 13px; }
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+header { position: relative; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; background: var(--accent); color: var(--accent-ink); border-radius: 28px; padding: 28px 28px 24px; min-height: 180px; }
+header .sub, header .stamp, header .stamp b { color: var(--accent-ink); }
+header .shine { position: absolute; top: 22px; right: 24px; width: 34px; height: 34px; fill: var(--accent-ink); }
+.brand { font: 900 15px/1 var(--font-display); letter-spacing: .02em; display: flex; align-items: center; gap: 8px; margin-bottom: 18px; }
+.brand svg { width: 16px; height: 16px; fill: currentColor; }
+.stamp { font-size: 13px; color: var(--muted); text-align: right; }
+.stamp b { color: var(--ink); }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.tile { background: var(--panel); border: 0; border-radius: 22px; padding: 14px 16px; display: grid; gap: 4px; }
+.tile .k { font-size: 13px; color: var(--muted); }
+.tile .v { font: 700 26px/1.15 var(--font-display); font-variant-numeric: tabular-nums; }
+.tile .d { font-size: 13px; }
+.tile.attn { background: var(--accent); color: var(--accent-ink); }
+.tile.attn .k, .tile.attn .d, .tile.attn .d span { color: var(--accent-ink); }
+.up { color: var(--ink); font-weight: 700; } .down { color: var(--accent); font-weight: 700; } .flat { color: var(--muted); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; overflow: hidden; }
+.card-h { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; background: var(--surface); position: sticky; top: 0; }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td.r, th.r { text-align: right; }
+.clin-name { font-weight: 700; font-size: 15px; }
+.clin-name a { color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 500; margin-left: 6px; }
+.clin-name a:hover { text-decoration: underline; }
+.bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 5px; min-width: 90px; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+.chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.grade-ok { background: var(--accent-soft); color: var(--ink); }
+.grade-warn { background: #dcdcdc; color: #0c0c0c; }
+.grade-bad { background: var(--accent); color: var(--accent-ink); }
+.pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; border: 1px solid transparent; }
+.pill.g-att { background: var(--accent); color: #fff; }
+.pill.g-work { background: var(--pill-work); color: var(--ink); }
+.pill.g-done { background: #dcdcdc; color: #0c0c0c; }
+.pill.g-other { background: transparent; color: var(--ink); border-color: var(--pill-line); }
+tfoot td { font-weight: 700; background: var(--panel); }
+
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.seg button { font: 500 13px var(--font-body); border: 0; background: transparent; color: var(--ink); padding: 8px 16px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.seg button:focus-visible, .chips button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+select, input[type="search"] { font: 14px var(--font-body); color: var(--ink); background: var(--panel); border: 0; border-radius: 999px; padding: 9px 16px; }
+input[type="search"] { min-width: 220px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.chips button { font: 500 12px var(--font-body); border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+.chips button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
+.chips button[aria-pressed="true"] .cnt { color: rgba(255,255,255,.8); }
+.chips button .cnt { color: var(--muted); margin-left: 4px; font-variant-numeric: tabular-nums; }
+.cmt { max-width: 460px; }
+.cmt .src { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.cmt .x { display: block; color: var(--accent); font-size: 12px; margin-top: 2px; }
+.empty { padding: 20px 16px; color: var(--muted); }
+.more { padding: 12px 16px; display: flex; justify-content: center; }
+.more button { font: 600 13px var(--font-body); border: 0; color: #fff; background: var(--accent); border-radius: 999px; padding: 10px 20px; cursor: pointer; }
+.tabs { scrollbar-width: none; position: sticky; top: 0; z-index: 5; background: var(--bg); display: flex; flex-wrap: wrap; gap: 2px 2px; border-bottom: 1px solid var(--line); padding-top: 4px; margin: -12px -4px 0; }
+.tabs::-webkit-scrollbar { display: none; }
+.tabs a { flex: none; padding: 10px 12px; font: 700 15px var(--font-body); color: var(--ink); text-decoration: none; border-bottom: 3px solid transparent; white-space: nowrap; }
+.tabs a .tb { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: 11px; line-height: 18px; background: #dcdcdc; color: #0c0c0c; font-variant-numeric: tabular-nums; }
+.tabs a .tb.bad { background: var(--accent); color: #fff; }
+.tabs a[aria-current="page"] { color: var(--accent); border-bottom-color: var(--accent); }
+.tabs a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.view { display: grid; gap: 28px; }
+.view[hidden] { display: none; }
+.clin-head { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; justify-content: space-between; }
+.clin-head a { color: var(--accent); font-size: 13px; }
+.notes { display: grid; gap: 6px; font-size: 13px; color: var(--muted); max-width: 75ch; }
+.err { padding: 16px; background: var(--accent); color: #fff; border-radius: 22px; }
+@media (max-width: 640px) {
+  .wrap { padding: 16px 16px 40px; }
+  h1 { font-size: 30px; }
+  header { border-radius: 22px; padding: 22px 18px; min-height: 0; }
+  .stamp { text-align: left; }
+  input[type="search"] { min-width: 0; width: 100%; }
+}
+@media (prefers-reduced-motion: no-preference) { .bar i { transition: width .3s ease; } }
+</style>
+
+<style>
+#lock { position: fixed; inset: 0; z-index: 1000; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 16px; }
+#lock[hidden] { display: none !important; }
+#lock form { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 14px; }
+#lock h1 { font-family: var(--font-display); font-size: 26px; line-height: 1.2; margin: 0; color: var(--ink); font-weight: 700; }
+#lock p { margin: 0; color: var(--muted); font-size: 15px; }
+#lock input { font: inherit; font-size: 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 22px; background: var(--surface); color: var(--ink); }
+#lock input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+#lock button { font: inherit; font-weight: 600; font-size: 16px; padding: 12px 16px; border: 0; border-radius: 22px; background: var(--accent); color: #fff; cursor: pointer; }
+#lock label { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px; }
+#lock label input { padding: 0; width: 16px; height: 16px; }
+#lock .lerr { color: var(--accent); font-weight: 600; min-height: 1.2em; }
+</style>
+</head>
+<body>
+<div id="lock">
+  <form id="lock-f" autocomplete="on">
+    <h1>Трекер закрывающих документов</h1>
+    <p>Введите пароль, чтобы открыть трекер.</p>
+    <input id="lock-p" type="password" autocomplete="current-password" placeholder="Пароль" required>
+    <label><input id="lock-r" type="checkbox" checked> Запомнить на этом устройстве</label>
+    <button type="submit" id="lock-b">Открыть</button>
+    <div class="lerr" id="lock-e"></div>
+  </form>
+</div>
+
+<div class="wrap">
+  <header>
+    <svg class="shine" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 0 C54 30 70 46 100 50 C70 54 54 70 50 100 C46 70 30 54 0 50 C30 46 46 30 50 0 Z"/></svg>
+    <div>
+      <div class="brand">МИА.РФ</div>
+      <h1>Трекер закрывающих документов</h1>
+      <div class="sub">Оплачено поставщикам без закрывающих документов, по ООО сети</div>
+    </div>
+    <div class="stamp" id="stamp">Загружаю данные…</div>
+  </header>
+
+  <nav class="tabs" id="tabs" aria-label="Разделы трекера"></nav>
+
+  <div class="view" id="v-summary">
+    <section class="tiles" id="tiles" aria-label="Итоги по сети"></section>
+    <section class="card" aria-labelledby="h-clin">
+      <div class="card-h">
+        <h2 id="h-clin">Клиники</h2>
+        <div class="seg" role="group" aria-label="Период сравнения">
+          <button type="button" class="p-day" aria-pressed="true">За день</button>
+          <button type="button" class="p-week" aria-pressed="false">За неделю</button>
+        </div>
+      </div>
+      <div class="scroll"><table id="clin"></table></div>
+    </section>
+    <section class="card" aria-labelledby="h-chg">
+      <div class="card-h"><h2 id="h-chg">Что изменилось по сети</h2><span class="sub" id="chg-sub"></span></div>
+      <div class="scroll"><table id="chg"></table></div>
+      <div class="more" id="chg-more" hidden><button type="button" id="chg-more-btn">Показать все изменения</button></div>
+    </section>
+  </div>
+
+  <div class="view" id="v-clinic" hidden>
+    <div class="clin-head"><h2 id="c-title" style="font-size:22px"></h2><span class="sub" id="c-meta"></span></div>
+    <section class="tiles" id="c-tiles" aria-label="Итоги по клинике"></section>
+    <section class="card" aria-labelledby="h-cchg">
+      <div class="card-h">
+        <h2 id="h-cchg">Что изменилось</h2>
+        <div class="seg" role="group" aria-label="Период сравнения">
+          <button type="button" class="p-day" aria-pressed="true">За день</button>
+          <button type="button" class="p-week" aria-pressed="false">За неделю</button>
+        </div>
+      </div>
+      <div class="scroll"><table id="c-chg"></table></div>
+      <div class="more" id="c-chg-more" hidden><button type="button" id="c-chg-more-btn">Показать все изменения</button></div>
+    </section>
+    <section class="card" aria-labelledby="h-sup">
+      <div class="card-h">
+        <h2 id="h-sup">Поставщики</h2>
+        <input type="search" id="f-q" placeholder="Поиск по поставщику или комментарию" aria-label="Поиск по поставщику или комментарию">
+      </div>
+      <div class="chips" id="f-st" role="group" aria-label="Фильтр по статусу"></div>
+      <div class="scroll"><table id="sup"></table></div>
+      <div class="more" id="sup-more" hidden><button type="button" id="sup-more-btn">Показать ещё</button></div>
+    </section>
+    <section class="card" aria-labelledby="h-drop" id="drop-card" hidden>
+      <div class="card-h"><h2 id="h-drop">Закрыты полностью с прошлого среза</h2><span class="sub" id="drop-sub"></span></div>
+      <div class="scroll"><table id="drop"></table></div>
+    </section>
+  </div>
+
+  <div class="view" id="v-buh" hidden>
+    <div class="clin-head"><h2 style="font-size:26px">Бухгалтерия 1С</h2><span class="sub" id="b-meta"></span></div>
+    <section class="tiles" id="b-tiles" aria-label="Итоги по 1С"></section>
+    <section class="card" aria-labelledby="h-borg">
+      <div class="card-h"><h2 id="h-borg">Сверка по ООО</h2><span class="sub">1С против таблиц директоров</span></div>
+      <div class="scroll"><table id="b-org"></table></div>
+    </section>
+    <section class="card" aria-labelledby="h-brows">
+      <div class="card-h">
+        <h2 id="h-brows">Расхождения</h2>
+        <div class="controls">
+          <select id="b-f-org" aria-label="ООО"></select>
+          <input type="search" id="b-q" placeholder="Поиск по поставщику" aria-label="Поиск по поставщику">
+        </div>
+      </div>
+      <div class="chips" id="b-cat" role="group" aria-label="Тип расхождения"></div>
+      <div class="scroll"><table id="b-rows"></table></div>
+      <div class="more" id="b-more" hidden><button type="button" id="b-more-btn">Показать ещё</button></div>
+    </section>
+  </div>
+
+  <div class="view" id="v-legend" hidden>
+    <section class="notes" aria-label="Как читать трекер">
+      <h2 style="color:var(--ink)">Как читать трекер</h2>
+      <div><b>Не закрыто</b> — сколько оплачено поставщику без закрывающих документов по последнему срезу в таблице клиники.</div>
+      <div><b>Требует внимания</b> — суммы без комментария, с проблемой или с комментарием, который устарел, потому что сумма выросла.</div>
+      <div><b>Закрыто по статусам</b> — закрыто, подписано в ЭДО, загружено в бухгалтерию, переплата, аванс или сверка с закрывающими.</div>
+      <div><b>Суммы</b> «не закрыто» и «долг» берутся из ежемесячного отчёта бухгалтерии 1С «Расчёты с поставщиками». Статусы и комментарии — из таблиц директоров. Поставщик, которого нет в 1С, получает статус «Закрыто по 1С»; поставщик, которого нет у директора, — «Нет в таблице директора».</div>
+      <div>Если в свежем срезе у поставщика нет комментария, показан комментарий из прошлого среза, и под ним указано, откуда он взят.</div>
+      <div>Трекер обновляется автоматически каждый день около 19:00 по Москве. Правки, внесённые в таблицы позже, появятся на следующий день.</div>
+      <div id="srcs"></div>
+    </section>
+    <section class="card" aria-labelledby="h-leg">
+      <div class="card-h"><h2 id="h-leg">Статусы</h2></div>
+      <div class="scroll"><table id="legend"></table></div>
+    </section>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var D = null, period = "day", view = "svodka", stFilter = "__attn", query = "", supLimit = 150, chgAll = false, cChgAll = false;
+  var CODES = { "АМИ Клиник Север": "sever", "Стоматолог ЛА КРД": "krd", "Стоматолог ЛА МСК": "msk", "Лофтдент": "loft", "МИА Василеостровский": "vas", "МИА Лиговский": "lig" };
+  var SHORT = { sever: "АМИ Север", krd: "Стоматолог КРД", msk: "Стоматолог МСК", loft: "Лофтдент", vas: "МИА Васька", lig: "МИА Лиговский" };
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+  var rub = function (v) { return Math.round(v || 0).toLocaleString("ru-RU") + " ₽"; };
+  var mln = function (v) { return (Math.abs(v) >= 1e5 ? (v / 1e6).toLocaleString("ru-RU", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " млн" : Math.round(v / 1e3).toLocaleString("ru-RU") + " тыс.") + " ₽"; };
+  var delta = function (now, before) {
+    if (before == null) return '<span class="flat">нет данных</span>';
+    var d = now - before;
+    if (Math.abs(d) < 1000) return '<span class="flat">без изменений</span>';
+    return '<span class="' + (d < 0 ? "down" : "up") + '">' + (d < 0 ? "▼ −" : "▲ +") + mln(Math.abs(d)) + "</span>";
+  };
+  var stMap = {};
+  function pill(s) {
+    var g = D.attn.indexOf(s) >= 0 ? "g-att" : D.closed.indexOf(s) >= 0 ? "g-done" : (s === "Долг перед поставщиком" ? "g-other" : "g-work");
+    return '<span class="pill ' + g + '">' + esc(s) + "</span>";
+  }
+  function cmp() { return D[period]; }
+  function clinicBy(code) { for (var i = 0; i < D.clinics.length; i++) if (CODES[D.clinics[i].sheet] === code) return D.clinics[i]; return null; }
+  function grade(c, pc) {
+    var t = c.totals, share = t.unclosed ? t.attention / t.unclosed : 0;
+    if (pc && !pc.known) return '<span class="chip grade-ok">Новая в трекере</span>';
+    if (share < 0.05) return '<span class="chip grade-ok">Почти всё разобрано</span>';
+    if (pc && (pc.comments > 0 || pc.statuses > 0)) return '<span class="chip grade-warn">Идёт работа</span>';
+    return '<span class="chip grade-bad">Нет движения</span>';
+  }
+  function tile(k, v, d, cls) { return '<div class="tile' + (cls ? " " + cls : "") + '"><span class="k">' + k + '</span><span class="v">' + v + '</span><span class="d">' + (d || "") + "</span></div>"; }
+
+  /* ---------- tabs ---------- */
+  function renderTabs() {
+    var html = '<a href="#svodka" data-v="svodka">Сводка</a>';
+    D.clinics.forEach(function (c) {
+      var code = CODES[c.sheet] || c.sheet, share = c.totals.unclosed ? c.totals.attention / c.totals.unclosed : 0;
+      html += '<a href="#' + code + '" data-v="' + code + '">' + esc(SHORT[code] || c.title) + '<span class="tb' + (share >= 0.05 ? " bad" : "") + '" title="Требует внимания">' + mln(c.totals.attention).replace(" ₽", "") + "</span></a>";
+    });
+    if (D.acc && D.acc.length) html += '<a href="#buh" data-v="buh">Бухгалтерия 1С</a>';
+    html += '<a href="#legenda" data-v="legenda">Легенда</a>';
+    $("tabs").innerHTML = html;
+  }
+  function route() {
+    var h = (location.hash || "").replace("#", "");
+    view = h && (h === "svodka" || h === "legenda" || (h === "buh" && D.acc) || clinicBy(h)) ? h : "svodka";
+    Array.prototype.forEach.call($("tabs").querySelectorAll("a"), function (a) { if (a.getAttribute("data-v") === view) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+    $("v-summary").hidden = view !== "svodka"; $("v-legend").hidden = view !== "legenda"; $("v-buh").hidden = view !== "buh";
+    $("v-clinic").hidden = view === "svodka" || view === "legenda" || view === "buh";
+    if (view === "svodka") { renderTiles(); renderClinics(); renderChanges(); }
+    else if (view === "buh") { renderBuh(); }
+    else if (view !== "legenda") { stFilter = "__attn"; query = ""; $("f-q").value = ""; supLimit = 150; cChgAll = false; renderClinic(); }
+    window.scrollTo(0, 0);
+  }
+
+  /* ---------- summary ---------- */
+  function renderTiles() {
+    var tot = 0, att = 0, closed = 0, attB = 0, totB = 0, C = cmp();
+    D.clinics.forEach(function (c) {
+      tot += c.totals.unclosed; att += c.totals.attention; closed += c.totals.closed;
+      var p = C && C.per[c.sheet];
+      attB += p && p.known ? p.att_before : c.totals.attention; totB += p && p.known ? p.unclosed_before : c.totals.unclosed;
+    });
+    var lab = C ? " с " + C.base : "";
+    $("tiles").innerHTML = tile("Не закрыто всего", mln(tot), C ? delta(tot, totB) + lab : "") +
+      tile("Требует внимания", mln(att), C ? delta(att, attB) + lab : "", "attn") +
+      tile("Закрыто по статусам", mln(closed), '<span class="flat">' + Math.round(tot ? closed / tot * 100 : 0) + "% от незакрытого в срезах</span>") +
+      tile("Изменённых строк", (C ? C.n_items : 0).toLocaleString("ru-RU"), '<span class="flat">' + (C ? "с " + C.base : "нет данных для сравнения") + "</span>");
+  }
+  function renderClinics() {
+    var C = cmp(), rows = "", s = { u: 0, a: 0, ab: 0, nc: 0, ns: 0 };
+    D.clinics.forEach(function (c) {
+      var t = c.totals, p = C && C.per[c.sheet], share = t.unclosed ? t.attention / t.unclosed : 0, code = CODES[c.sheet];
+      s.u += t.unclosed; s.a += t.attention; s.ab += p && p.known ? p.att_before : t.attention; s.nc += p ? p.comments : 0; s.ns += p ? p.statuses : 0;
+      rows += "<tr><td class='clin-name'><a href='#" + code + "' style='font-size:15px;margin:0;font-weight:700'>" + esc(c.title) + "</a><div class='sub'>" + (c.acc_date ? "суммы: 1С на " + esc(c.acc_date) + " · комментарии: " + esc(c.cut) : "срез " + esc(c.cut) + (c.prev ? ", пред. " + esc(c.prev) : "")) + "</div></td>" +
+        "<td class='r num'>" + t.n + "</td><td class='r num'>" + mln(t.unclosed) + "<div class='sub'>" + (p && p.known ? delta(t.unclosed, p.unclosed_before) : "") + "</div></td>" +
+        "<td class='r num'>" + mln(t.attention) + "<div class='bar' title='" + Math.round(share * 100) + "% от незакрытого'><i style='width:" + Math.min(100, share * 100).toFixed(1) + "%'></i></div></td>" +
+        "<td class='r num'>" + (p && p.known ? delta(t.attention, p.att_before) : "<span class='flat'>—</span>") + "</td>" +
+        "<td class='r num'>" + (p ? p.comments : "—") + "</td><td class='r num'>" + (p ? p.statuses : "—") + "</td><td>" + grade(c, p) + "</td></tr>";
+    });
+    $("clin").innerHTML = "<thead><tr><th>Клиника</th><th class='r'>Поставщиков</th><th class='r'>Не закрыто</th><th class='r'>Требует внимания</th><th class='r'>Изменение" + (C ? " с " + esc(C.base) : "") + "</th><th class='r'>Новых комментариев</th><th class='r'>Смен статуса</th><th>Оценка</th></tr></thead><tbody>" + rows +
+      "</tbody><tfoot><tr><td>Итого по сети</td><td></td><td class='r num'>" + mln(s.u) + "</td><td class='r num'>" + mln(s.a) + "</td><td class='r num'>" + (C ? delta(s.a, s.ab) : "—") + "</td><td class='r num'>" + (C ? s.nc : "—") + "</td><td class='r num'>" + (C ? s.ns : "—") + "</td><td></td></tr></tfoot>";
+  }
+  function changeTable(items, withClinic) {
+    var title = {}; D.clinics.forEach(function (c) { title[c.sheet] = SHORT[CODES[c.sheet]] || c.title; });
+    return "<thead><tr>" + (withClinic ? "<th>Клиника</th>" : "") + "<th>Поставщик</th><th class='r'>Не закрыто</th><th>Статус был → стал</th><th>Комментарий сейчас</th></tr></thead><tbody>" +
+      items.map(function (i) {
+        return "<tr>" + (withClinic ? "<td>" + esc(title[i.cl] || i.cl) + "</td>" : "") + "<td>" + esc(i.n) + "</td><td class='r num'>" + rub(i.p) + "</td><td style='min-width:230px'>" +
+          (i.f === i.t ? pill(i.t) + " <span class='sub'>новый комментарий</span>" : (i.f ? pill(i.f) : "<span class='sub'>—</span>") + " → " + pill(i.t)) + "</td><td class='cmt'>" + esc(i.c) + "</td></tr>";
+      }).join("") + "</tbody>";
+  }
+  function renderChanges() {
+    var C = cmp();
+    if (!C) { $("chg").innerHTML = ""; $("chg-sub").textContent = "Сравнение появится после следующего обновления"; $("chg-more").hidden = true; return; }
+    $("chg-sub").textContent = "С " + C.base + " по " + D.date + ": " + C.n_items + " строк, сначала крупные суммы";
+    if (!C.items.length) { $("chg").innerHTML = "<tbody><tr><td class='empty'>Ни в одной таблице за этот период ничего не поменялось.</td></tr></tbody>"; $("chg-more").hidden = true; return; }
+    $("chg").innerHTML = changeTable(chgAll ? C.items : C.items.slice(0, 20), true);
+    $("chg-more").hidden = chgAll || C.items.length <= 20;
+  }
+
+  /* ---------- clinic tab ---------- */
+  function renderClinic() {
+    var c = clinicBy(view), t = c.totals, C = cmp(), p = C && C.per[c.sheet];
+    $("c-title").textContent = c.title;
+    $("c-meta").innerHTML = (c.acc_date ? "Суммы: 1С на " + esc(c.acc_date) + " · комментарии: срез директора " + esc(c.cut) : "Срез " + esc(c.cut)) + (c.prev ? " · пред. срез " + esc(c.prev) : "") + " · вкладки " + esc(c.cut_tabs) + ' · <a href="' + esc(c.url) + '">таблица директора ↗</a>';
+    var lab = C ? " с " + C.base : "";
+    $("c-tiles").innerHTML = tile(c.acc_date ? "Не закрыто по 1С на " + c.acc_date : "Не закрыто", mln(t.unclosed), p && p.known ? delta(t.unclosed, p.unclosed_before) + lab : '<span class="flat">' + t.n + " поставщиков</span>") +
+      tile("Требует внимания", mln(t.attention), p && p.known ? delta(t.attention, p.att_before) + lab : "", "attn") +
+      tile("Закрыто по статусам", mln(t.closed), '<span class="flat">' + Math.round(t.unclosed ? t.closed / t.unclosed * 100 : 0) + "% от незакрытого</span>") +
+      tile("Оценка", grade(c, p), p ? '<span class="flat">' + p.comments + " новых комментариев, " + p.statuses + " смен статуса" + lab + "</span>" : "");
+    renderClinicChanges(); renderChips(); renderSup(); renderDropped();
+  }
+  function renderClinicChanges() {
+    var c = clinicBy(view), C = cmp();
+    if (!C) { $("c-chg").innerHTML = "<tbody><tr><td class='empty'>Сравнение появится после следующего обновления.</td></tr></tbody>"; $("c-chg-more").hidden = true; return; }
+    var items = C.items.filter(function (i) { return i.cl === c.sheet; });
+    if (!items.length) { $("c-chg").innerHTML = "<tbody><tr><td class='empty'>С " + esc(C.base) + " в таблице этой клиники ничего не поменялось.</td></tr></tbody>"; $("c-chg-more").hidden = true; return; }
+    $("c-chg").innerHTML = changeTable(cChgAll ? items : items.slice(0, 15), false);
+    $("c-chg-more").hidden = cChgAll || items.length <= 15;
+    $("c-chg-more-btn").textContent = "Показать все изменения (" + items.length + ")";
+  }
+  function renderChips() {
+    var c = clinicBy(view), rows = c.rows.filter(function (r) { return r.p > 0; }), cnt = {};
+    rows.forEach(function (r) { cnt[r.s] = (cnt[r.s] || 0) + 1; });
+    var debtN = c.rows.filter(function (r) { return r.p <= 0 && r.d > 0; }).length;
+    var btn = function (key, label, n) { return '<button type="button" data-st="' + esc(key) + '" aria-pressed="' + (stFilter === key ? "true" : "false") + '">' + esc(label) + '<span class="cnt">' + n + "</span></button>"; };
+    var html = btn("__attn", "Требует внимания", rows.filter(function (r) { return D.attn.indexOf(r.s) >= 0; }).length) + btn("", "Все", rows.length + debtN);
+    D.statuses.forEach(function (s) { var n = s[0] === "Долг перед поставщиком" ? debtN : cnt[s[0]]; if (n) html += btn(s[0], s[0], n); });
+    $("f-st").innerHTML = html;
+    Array.prototype.forEach.call($("f-st").querySelectorAll("button"), function (b) {
+      b.addEventListener("click", function () { stFilter = b.getAttribute("data-st") || ""; supLimit = 150; renderChips(); renderSup(); });
+    });
+  }
+  function renderSup() {
+    var c = clinicBy(view), q = query.trim().toLowerCase();
+    var rows = c.rows.filter(function (r) {
+      if (stFilter === "__attn" && (D.attn.indexOf(r.s) < 0 || r.p <= 0)) return false;
+      if (stFilter && stFilter !== "__attn" && r.s !== stFilter) return false;
+      if (q && (r.n + " " + r.c).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    }).sort(function (a, b) { return (b.p || 0) - (a.p || 0) || (b.d || 0) - (a.d || 0); });
+    if (!rows.length) { $("sup").innerHTML = "<tbody><tr><td class='empty'>Под этот фильтр поставщиков нет.</td></tr></tbody>"; $("sup-more").hidden = true; return; }
+    var multi = rows.some(function (r) { return r.tabs; });
+    $("sup").innerHTML = "<thead><tr><th>Поставщик</th><th class='r'>Не закрыто</th><th class='r'>" + (c.acc_date ? "У директора" : "Пред. срез") + "</th><th>ЭДО</th><th>Статус</th><th>Комментарий</th>" + (multi ? "<th>Есть во вкладках</th>" : "") + "</tr></thead><tbody>" +
+      rows.slice(0, supLimit).map(function (r) {
+        var amt = r.p > 0 ? rub(r.p) : (r.d > 0 ? "<span class='sub'>долг " + rub(r.d) + "</span>" : rub(0));
+        return "<tr><td>" + esc(r.n) + (r.dep ? "<div class='sub'>" + esc(r.dep) + "</div>" : "") + "</td><td class='r num'>" + amt + "</td>" +
+          "<td class='r num sub'>" + (c.acc_date ? (r.dv != null && r.dv > 0 ? rub(r.dv) : "нет") : (r.pr != null ? rub(r.pr) : (r.nw ? "новый" : "—"))) + "</td><td class='sub'>" + (r.edo === true ? "есть" : r.edo === false ? "нет" : "—") + "</td>" +
+          "<td>" + pill(r.s) + "</td><td class='cmt'>" + esc(r.c) + (r.src && r.c ? "<span class='src'>" + esc(r.src) + "</span>" : "") + (r.x ? "<span class='x'>" + esc(r.x) + "</span>" : "") + "</td>" +
+          (multi ? "<td class='sub'>" + esc(r.tabs) + "</td>" : "") + "</tr>";
+      }).join("") + "</tbody>";
+    $("sup-more").hidden = rows.length <= supLimit;
+    $("sup-more-btn").textContent = "Показать ещё (" + (rows.length - supLimit) + ")";
+  }
+  function renderDropped() {
+    var c = clinicBy(view);
+    if (!c.dropped || !c.dropped.length || !c.prev) { $("drop-card").hidden = true; return; }
+    $("drop-card").hidden = false;
+    var sum = c.dropped.reduce(function (a, r) { return a + r.p; }, 0);
+    $("drop-sub").textContent = "Были в срезе " + c.prev + ", в срезе " + c.cut + " их нет: " + c.dropped.length + " поставщиков на " + mln(sum);
+    $("drop").innerHTML = "<thead><tr><th>Поставщик</th><th class='r'>Сумма в прошлом срезе</th></tr></thead><tbody>" +
+      c.dropped.map(function (r) { return "<tr><td>" + esc(r.n) + "</td><td class='r num'>" + rub(r.p) + "</td></tr>"; }).join("") + "</tbody>";
+  }
+
+  /* ---------- 1C ---------- */
+  var bOrg = "", bCat = "", bQ = "", bLimit = 150;
+  var CATS = { only1c: "Только в 1С", onlydir: "Только у директора (в 1С закрыто)", diff: "Суммы различаются" };
+  var ORGN = { "МИА ВАСИЛЕОСТРОВСКИЙ": "МИА Васька", "МИА ЛИГОВСКИЙ": "МИА Лиговский", "СТОМАТОЛОГ Л. А.": "Стоматолог Л.А. (КРД + МСК)", "АМИ КЛИНИК СЕВЕР": "АМИ Север", "ЛОФТДЕНТ": "Лофтдент" };
+  function renderBuh() {
+    var A = D.acc, t1 = 0, td = 0, w = 0;
+    A.forEach(function (a) { t1 += a.total_1c; td += a.total_dir; w += a.debt_1c; });
+    $("b-meta").textContent = "Отчёт «Расчёты с поставщиками» на " + A[0].date + " (группа «Поставщики»). Сравнение с последними срезами в таблицах директоров.";
+    $("b-tiles").innerHTML = tile("Не закрыто по 1С", mln(t1), '<span class="flat">«Нам должны» на ' + esc(A[0].date) + "</span>") +
+      tile("В таблицах директоров", mln(td), '<span class="flat">последние срезы директоров</span>') +
+      tile("Разница 1С − директора", (t1 - td < 0 ? "−" : "+") + mln(Math.abs(t1 - td)), '<span class="flat">' + (t1 > td ? "в 1С больше, чем у директоров" : "у директоров больше, чем в 1С") + "</span>", Math.abs(t1 - td) > 1e6 ? "attn" : "") +
+      tile("Наш долг поставщикам", mln(w), '<span class="flat">«Мы должны» по 1С</span>');
+    $("b-org").innerHTML = "<thead><tr><th>ООО</th><th class='r'>Не закрыто по 1С</th><th class='r'>У директора</th><th class='r'>Разница</th><th class='r'>Только в 1С</th><th class='r'>Только у директора</th><th class='r'>Суммы различаются</th><th class='r'>Совпадает</th></tr></thead><tbody>" +
+      A.map(function (a) {
+        var c = { only1c: [0, 0], onlydir: [0, 0], diff: [0, 0] };
+        a.rows.forEach(function (r) { c[r.cat][0]++; c[r.cat][1] += r.cat === "onlydir" ? r.dv : r.cat === "only1c" ? r.a : Math.abs(r.a - r.dv); });
+        var d = a.total_1c - a.total_dir;
+        return "<tr><td class='clin-name'>" + esc(ORGN[a.org] || a.org) + "</td><td class='r num'>" + mln(a.total_1c) + "<div class='sub'>" + a.n_1c + " пост.</div></td><td class='r num'>" + mln(a.total_dir) + "<div class='sub'>" + a.n_dir + " пост.</div></td>" +
+          "<td class='r num'>" + (Math.abs(d) < 1000 ? "<span class='flat'>совпадает</span>" : "<span class='" + (d > 0 ? "up" : "down") + "'>" + (d > 0 ? "+" : "−") + mln(Math.abs(d)) + "</span>") + "</td>" +
+          "<td class='r num'>" + c.only1c[0] + "<div class='sub'>" + mln(c.only1c[1]) + "</div></td><td class='r num'>" + c.onlydir[0] + "<div class='sub'>" + mln(c.onlydir[1]) + "</div></td><td class='r num'>" + c.diff[0] + "</td><td class='r num'>" + a.n_same + "</td></tr>";
+      }).join("") + "</tbody>";
+    var opt = '<option value="">Все ООО</option>';
+    A.forEach(function (a) { opt += '<option value="' + esc(a.org) + '"' + (a.org === bOrg ? " selected" : "") + ">" + esc(ORGN[a.org] || a.org) + "</option>"; });
+    $("b-f-org").innerHTML = opt;
+    renderBuhRows();
+  }
+  function renderBuhRows() {
+    var rows = [];
+    D.acc.forEach(function (a) { if (!bOrg || a.org === bOrg) a.rows.forEach(function (r) { rows.push([a, r]); }); });
+    var cnt = { only1c: 0, onlydir: 0, diff: 0 };
+    rows.forEach(function (x) { cnt[x[1].cat]++; });
+    var chips = '<button type="button" data-c="" aria-pressed="' + (bCat === "" ? "true" : "false") + '">Все<span class="cnt">' + rows.length + "</span></button>";
+    Object.keys(CATS).forEach(function (k) { chips += '<button type="button" data-c="' + k + '" aria-pressed="' + (bCat === k ? "true" : "false") + '">' + CATS[k] + '<span class="cnt">' + cnt[k] + "</span></button>"; });
+    $("b-cat").innerHTML = chips;
+    Array.prototype.forEach.call($("b-cat").querySelectorAll("button"), function (b) { b.addEventListener("click", function () { bCat = b.getAttribute("data-c"); bLimit = 150; renderBuhRows(); }); });
+    var q = bQ.trim().toLowerCase();
+    rows = rows.filter(function (x) { return (!bCat || x[1].cat === bCat) && (!q || x[1].n.toLowerCase().indexOf(q) >= 0); })
+      .sort(function (a, b) { return Math.abs(b[1].a - b[1].dv) - Math.abs(a[1].a - a[1].dv); });
+    if (!rows.length) { $("b-rows").innerHTML = "<tbody><tr><td class='empty'>Расхождений по этому фильтру нет.</td></tr></tbody>"; $("b-more").hidden = true; return; }
+    var many = !bOrg;
+    $("b-rows").innerHTML = "<thead><tr>" + (many ? "<th>ООО</th>" : "") + "<th>Поставщик</th><th class='r'>1С: не закрыто</th><th class='r'>У директора</th><th class='r'>Разница</th><th>Расхождение</th><th>Статус в трекере</th><th>Комментарий директора</th></tr></thead><tbody>" +
+      rows.slice(0, bLimit).map(function (x) {
+        var a = x[0], r = x[1], d = r.a - r.dv;
+        return "<tr>" + (many ? "<td class='sub'>" + esc(ORGN[a.org] || a.org) + "</td>" : "") + "<td>" + esc(r.n) + (a.sheets.length > 1 ? "<div class='sub'>" + esc(SHORT[CODES[r.sh]] || r.sh) + "</div>" : "") + "</td>" +
+          "<td class='r num'>" + rub(r.a) + (r.w > 0 ? "<div class='sub'>мы должны " + rub(r.w) + "</div>" : "") + "</td><td class='r num'>" + (r.dv > 0 ? rub(r.dv) : "<span class='sub'>нет</span>") + "</td>" +
+          "<td class='r num'><span class='" + (d > 0 ? "up" : "down") + "'>" + (d > 0 ? "+" : "−") + rub(Math.abs(d)) + "</span></td>" +
+          "<td><span class='chip " + (r.cat === "only1c" ? "grade-bad" : r.cat === "onlydir" ? "grade-warn" : "grade-ok") + "'>" + CATS[r.cat] + "</span></td><td>" + pill(r.s) + "</td><td class='cmt'>" + esc(r.c) + "</td></tr>";
+      }).join("") + "</tbody>";
+    $("b-more").hidden = rows.length <= bLimit;
+    $("b-more-btn").textContent = "Показать ещё (" + (rows.length - bLimit) + ")";
+  }
+
+  /* ---------- legend ---------- */
+  function renderLegend() {
+    $("srcs").innerHTML = "<b>Таблицы директоров:</b> " + D.clinics.map(function (c) { return '<a href="' + esc(c.url) + '">' + esc(c.title) + "</a> (" + esc(c.cut_tabs) + ")"; }).join(" · ");
+    $("legend").innerHTML = "<thead><tr><th>Статус</th><th>Группа</th></tr></thead><tbody>" + D.statuses.map(function (s) {
+      var g = D.attn.indexOf(s[0]) >= 0 ? "<span class='chip grade-bad'>Требует внимания</span>" : D.closed.indexOf(s[0]) >= 0 ? "<span class='chip grade-ok'>Закрыто</span>" : s[0] === "Долг перед поставщиком" ? "<span class='sub'>долг клиники, не входит в «не закрыто»</span>" : "<span class='chip grade-warn'>В работе</span>";
+      return "<tr><td>" + pill(s[0]) + "</td><td>" + g + "</td></tr>";
+    }).join("") + "</tbody>";
+  }
+
+  function setPeriod(p) {
+    period = p; chgAll = false; cChgAll = false;
+    Array.prototype.forEach.call(document.querySelectorAll(".p-day"), function (b) { b.setAttribute("aria-pressed", p === "day" ? "true" : "false"); });
+    Array.prototype.forEach.call(document.querySelectorAll(".p-week"), function (b) { b.setAttribute("aria-pressed", p === "week" ? "true" : "false"); });
+    if (view === "svodka") { renderTiles(); renderClinics(); renderChanges(); }
+    else if (view !== "legenda" && view !== "buh") renderClinic();
+  }
+
+  function init(data) {
+    D = data;
+    D.statuses.forEach(function (s) { stMap[s[0]] = s; });
+    if (!D.day && D.week) period = "week";
+    $("stamp").innerHTML = "Обновлено <b>" + esc(D.generated) + "</b> МСК<br>следующее обновление около 19:00";
+    renderTabs(); renderLegend();
+    Array.prototype.forEach.call(document.querySelectorAll(".p-day"), function (b) { b.addEventListener("click", function () { setPeriod("day"); }); });
+    Array.prototype.forEach.call(document.querySelectorAll(".p-week"), function (b) { b.addEventListener("click", function () { setPeriod("week"); }); });
+    $("f-q").addEventListener("input", function () { query = this.value; supLimit = 150; renderSup(); });
+    $("sup-more-btn").addEventListener("click", function () { supLimit += 300; renderSup(); });
+    $("chg-more-btn").addEventListener("click", function () { chgAll = true; renderChanges(); });
+    $("c-chg-more-btn").addEventListener("click", function () { cChgAll = true; renderClinicChanges(); });
+    $("b-f-org").addEventListener("change", function () { bOrg = this.value; bLimit = 150; renderBuhRows(); });
+    $("b-q").addEventListener("input", function () { bQ = this.value; bLimit = 150; renderBuhRows(); });
+    $("b-more-btn").addEventListener("click", function () { bLimit += 300; renderBuhRows(); });
+    window.addEventListener("hashchange", route);
+    setPeriod(period); route();
+  }
+
+
+  function b64(s) { var b = atob(s), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+  function decrypt(enc, pass) {
+    var te = new TextEncoder();
+    return crypto.subtle.importKey("raw", te.encode(pass), "PBKDF2", false, ["deriveKey"])
+      .then(function (k) {
+        return crypto.subtle.deriveKey({ name: "PBKDF2", salt: b64(enc.salt), iterations: enc.iter, hash: "SHA-256" },
+          k, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+      })
+      .then(function (key) { return crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(enc.iv) }, key, b64(enc.ct)); })
+      .then(function (buf) { return JSON.parse(new TextDecoder().decode(buf)); });
+  }
+  var LS = "mia-tracker-pass";
+  function lsGet() { try { return localStorage.getItem(LS); } catch (e) { return null; } }
+  function lsSet(v) { try { if (v) localStorage.setItem(LS, v); else localStorage.removeItem(LS); } catch (e) {} }
+  fetch("data.enc?v=" + Date.now(), { cache: "no-store" })
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function (enc) {
+      var lock = $("lock"), f = $("lock-f"), p = $("lock-p"), er = $("lock-e"), btn = $("lock-b");
+      function open(pass, remember) {
+        btn.disabled = true; er.textContent = "";
+        return decrypt(enc, pass).then(function (data) {
+          if (remember) lsSet(pass);
+          lock.hidden = true; init(data);
+        }).catch(function () {
+          lsSet(null); btn.disabled = false; er.textContent = "Неверный пароль"; p.focus(); p.select();
+        });
+      }
+      f.addEventListener("submit", function (e) { e.preventDefault(); open(p.value, $("lock-r").checked); });
+      var saved = lsGet();
+      if (saved) open(saved, true); else p.focus();
+    })
+    .catch(function () {
+      $("lock").hidden = true;
+      $("stamp").textContent = "";
+      $("v-summary").innerHTML = '<div class="err">Не удалось загрузить данные трекера. Обновите страницу; если ошибка повторится, напишите Анжеле.</div>';
+    });
+})();
+</script>
+</body>
+</html>
