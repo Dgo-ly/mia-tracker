@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.env
+.state/
+*.xlsx
+*.xls
+*.csv
+*.zip
+*.log
+plaintext/
+snapshots/
