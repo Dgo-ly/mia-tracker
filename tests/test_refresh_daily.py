@@ -37,9 +37,17 @@ class AutomaticPatchTests(unittest.TestCase):
         self.assertEqual(unresolved, 0)
         self.assertEqual(updates[0]["set"], {"c": "неверный документ", "s": "Проблема"})
 
-    def test_duplicate_supplier_requires_review(self):
-        self.current["sources"]["msk"]["tabs"]["Лист2"] = {"records": [self.record]}
+    def test_duplicate_evidence_requires_review(self):
+        self.previous["sources"]["msk"]["tabs"]["Лист2"] = {"records": [self.record]}
         self.assertEqual(self.plan(), ([], 1))
+
+    def test_other_tab_with_distinct_comment_does_not_hide_exact_evidence(self):
+        other = dict(self.record, comments=["другой комментарий"])
+        for snapshot in (self.previous, self.current):
+            snapshot["sources"]["msk"]["tabs"]["Лист2"] = {"records": [other]}
+        updates, unresolved = self.plan()
+        self.assertEqual(len(updates), 1)
+        self.assertEqual(unresolved, 0)
 
     def test_deleted_comment_and_financial_changes_require_review(self):
         self.comparison["changes"][0]["after"][0]["comments"] = []

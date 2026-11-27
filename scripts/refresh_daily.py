@@ -27,17 +27,18 @@ TEXT_RULES = {
 def automatic_patch(baseline, previous, current, comparison):
     suppliers = index(baseline)
     clinics = {}
-    current_names = {}
-    old_names = {}
+    current_evidence = {}
+    old_evidence = {}
     for source, value in current["sources"].items():
         file_id = value["file"]["id"]
         matches = [clinic["sheet"] for clinic in baseline["clinics"]
                    if file_id in clinic["url"].split("/")]
         if len(matches) == 1:
             clinics[source] = matches[0]
-        for state, output in ((previous, old_names), (current, current_names)):
+        for state, output in ((previous, old_evidence), (current, current_evidence)):
             output[source] = Counter(
-                record["key"] for tab in state["sources"][source]["tabs"].values()
+                (record["name"], tuple(record["comments"]))
+                for tab in state["sources"][source]["tabs"].values()
                 for record in tab["records"]
             )
     updates = []
@@ -45,13 +46,16 @@ def automatic_patch(baseline, previous, current, comparison):
     allowed = {status[0] for status in baseline["statuses"]}
     for change in comparison["changes"]:
         source = change["source"]
-        key = change["supplier_key"]
         if (source not in clinics
                 or change["requires_review"] or change["changed_fields"] != ["comments"]
-                or old_names[source][key] != 1 or current_names[source][key] != 1):
+                or len(change["before"]) != 1 or len(change["after"]) != 1):
             unresolved += 1
             continue
         before, after = change["before"][0], change["after"][0]
+        if (old_evidence[source][before["name"], tuple(before["comments"])] != 1
+                or current_evidence[source][after["name"], tuple(after["comments"])] != 1):
+            unresolved += 1
+            continue
         identity = (clinics[source], before["name"])
         row = suppliers.get(identity)
         if (not row or row["p"] < 1 or before["name"] != after["name"]
@@ -59,8 +63,7 @@ def automatic_patch(baseline, previous, current, comparison):
                 or row["c"] != before["comments"][0]
                 or len(after["comments"]) != 1 or not after["comments"][0]
                 or before.get("include_supplier_scope") is False
-                or before.get("overpayment_flag")
-                or change["tab"] not in row["tabs"]):
+                or before.get("overpayment_flag")):
             unresolved += 1
             continue
         old_status = classify_status(row["c"], clinic_kind=source, explicit_missing_documents=True)
