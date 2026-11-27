@@ -109,13 +109,7 @@ jobs:
       - name: Записать зашифрованное обновление
         id: commit
         if: steps.refresh.outputs.ready == 'true' && (github.event_name == 'schedule' || inputs.mode == 'publish')
-        env:
-          PAGES_BY_ACTIONS: ${{ vars.MIA_PAGES_ACTIONS }}
         run: |
-          if [[ "$PAGES_BY_ACTIONS" != true ]]; then
-            echo "::error::Сначала настройте GitHub Pages на публикацию через Actions."
-            exit 1
-          fi
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$(git rev-parse HEAD)"
           cp "$RUNNER_TEMP/candidate/data.enc" "$RUNNER_TEMP/candidate/source-state.enc" .
           git add -- data.enc source-state.enc
@@ -125,7 +119,7 @@ jobs:
           echo "published=true" >> "$GITHUB_OUTPUT"
       - name: Подготовить файлы для сайта
         id: pages
-        if: vars.MIA_PAGES_ACTIONS == 'true' && (steps.commit.outputs.published == 'true' || github.event_name == 'push' || inputs.mode == 'deploy_current')
+        if: steps.commit.outputs.published == 'true' || github.event_name == 'push' || inputs.mode == 'deploy_current'
         run: |
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$(git rev-parse HEAD)"
           mkdir "$RUNNER_TEMP/pages"
