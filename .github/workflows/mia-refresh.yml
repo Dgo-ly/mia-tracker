@@ -42,6 +42,9 @@ jobs:
       contents: write
     outputs:
       deploy: ${{ steps.pages.outputs.deploy }}
+      data_hash: ${{ steps.pages.outputs.data_hash }}
+      index_hash: ${{ steps.pages.outputs.index_hash }}
+      revision: ${{ steps.pages.outputs.revision }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -120,7 +123,12 @@ jobs:
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$(git rev-parse HEAD)"
           mkdir "$RUNNER_TEMP/pages"
           cp -- index.html data.enc robots.txt .nojekyll "$RUNNER_TEMP/pages/"
-          echo "deploy=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "deploy=true"
+            echo "data_hash=$(sha256sum data.enc | cut -d' ' -f1)"
+            echo "index_hash=$(sha256sum index.html | cut -d' ' -f1)"
+            echo "revision=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
       - uses: actions/upload-pages-artifact@v3
         if: steps.pages.outputs.deploy == 'true'
         with:
@@ -138,6 +146,30 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
+      - name: Проверить актуальность коммита
+        env:
+          EXPECTED_REVISION: ${{ needs.refresh.outputs.revision }}
+        run: |
+          test "$(git ls-remote "https://github.com/$GITHUB_REPOSITORY.git" refs/heads/main | cut -f1)" = "$EXPECTED_REVISION"
       - name: Опубликовать сайт
         id: deploy
         uses: actions/deploy-pages@v4
+      - name: Сверить файлы на действующем сайте
+        env:
+          EXPECTED_DATA: ${{ needs.refresh.outputs.data_hash }}
+          EXPECTED_INDEX: ${{ needs.refresh.outputs.index_hash }}
+        run: |
+          for attempt in {1..12}; do
+            base="https://dgo-ly.github.io/mia-tracker"
+            token="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$attempt"
+            if curl --fail --silent --location --max-time 10 "$base/data.enc?v=$token" -o "$RUNNER_TEMP/live-data.enc" &&
+               curl --fail --silent --location --max-time 10 "$base/?v=$token" -o "$RUNNER_TEMP/live-index.html" &&
+               printf '%s  %s\n' "$EXPECTED_DATA" "$RUNNER_TEMP/live-data.enc" | sha256sum --check --status &&
+               printf '%s  %s\n' "$EXPECTED_INDEX" "$RUNNER_TEMP/live-index.html" | sha256sum --check --status; then
+              echo "Сайт отдал проверенную страницу и зашифрованный снимок."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Опубликованные файлы не совпали с проверенным снимком."
+          exit 1
