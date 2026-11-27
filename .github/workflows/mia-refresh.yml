@@ -1,0 +1,143 @@
+name: МИА.РФ — ежедневное обновление
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/mia-refresh.yml"
+      - "scripts/**"
+      - "tests/**"
+      - "requirements.txt"
+      - "index.html"
+      - "data.enc"
+      - "source-state.enc"
+      - "robots.txt"
+      - ".nojekyll"
+  schedule:
+    - cron: "0 16 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Режим запуска
+        type: choice
+        options:
+          - check
+          - publish
+          - deploy_current
+        default: check
+
+concurrency:
+  group: mia-tracker-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    if: github.ref == 'refs/heads/main' && (github.event_name != 'schedule' || vars.MIA_AUTOMATION_ENABLED == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    outputs:
+      deploy: ${{ steps.pages.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Проверить код
+        run: |
+          python -m pip install -r requirements.txt
+          python -m unittest discover -s tests
+      - name: Проверить действующий пароль и опубликованные данные
+        env:
+          MIA_TRACKER_PASSWORD: ${{ secrets.MIA_TRACKER_PASSWORD }}
+        run: |
+          PYTHONPATH=scripts python - <<'PY'
+          import os
+          import sys
+          from tracker import decrypt, digest, load
+          from validate_data import validate
+
+          secret = os.environ.get("MIA_TRACKER_PASSWORD")
+          if not secret:
+              sys.exit("Секрет MIA_TRACKER_PASSWORD не настроен.")
+          try:
+              baseline = decrypt(load("data.enc"), secret.encode())
+              source = decrypt(load("source-state.enc"), secret.encode())
+              assert validate(baseline)["ok"]
+              assert source["published_data_sha256"] == digest(baseline)
+          except Exception:
+              sys.exit("Проверка пароля или целостности данных не прошла.")
+          print("Пароль и целостность данных проверены.")
+          PY
+      - name: Прочитать таблицы и подготовить обновление
+        id: refresh
+        if: github.event_name == 'schedule' || inputs.mode == 'check' || inputs.mode == 'publish'
+        env:
+          MIA_TRACKER_PASSWORD: ${{ secrets.MIA_TRACKER_PASSWORD }}
+          MIA_GOOGLE_CREDENTIALS: ${{ secrets.MIA_GOOGLE_CREDENTIALS }}
+        run: |
+          if [[ -z "$MIA_GOOGLE_CREDENTIALS" ]]; then
+            echo "::error::Секрет MIA_GOOGLE_CREDENTIALS не настроен."
+            exit 1
+          fi
+          python scripts/check_sources.py --state source-state.enc --output "$RUNNER_TEMP/review.enc"
+          result=$(python scripts/refresh_daily.py --reference HEAD \
+            --review "$RUNNER_TEMP/review.enc" --output "$RUNNER_TEMP/candidate")
+          printf '%s\n' "$result" >> "$GITHUB_STEP_SUMMARY"
+          case "$result" in
+            result=ready\ *) echo "ready=true" >> "$GITHUB_OUTPUT" ;;
+            result=review_required\ *) echo "::warning::Изменения требуют ручной сверки. Сайт оставлен на проверенной версии." ;;
+            result=unchanged\ *) echo "Все источники проверены, обновлений нет." ;;
+            *) exit 1 ;;
+          esac
+      - name: Записать зашифрованное обновление
+        id: commit
+        if: steps.refresh.outputs.ready == 'true' && (github.event_name == 'schedule' || inputs.mode == 'publish')
+        env:
+          PAGES_BY_ACTIONS: ${{ vars.MIA_PAGES_ACTIONS }}
+        run: |
+          if [[ "$PAGES_BY_ACTIONS" != true ]]; then
+            echo "::error::Сначала настройте GitHub Pages на публикацию через Actions."
+            exit 1
+          fi
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$(git rev-parse HEAD)"
+          cp "$RUNNER_TEMP/candidate/data.enc" "$RUNNER_TEMP/candidate/source-state.enc" .
+          git add -- data.enc source-state.enc
+          git -c user.name='mia-tracker[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m 'Ежедневное обновление трекера'
+          git push origin HEAD:refs/heads/main
+          echo "published=true" >> "$GITHUB_OUTPUT"
+      - name: Подготовить файлы для сайта
+        id: pages
+        if: vars.MIA_PAGES_ACTIONS == 'true' && (steps.commit.outputs.published == 'true' || github.event_name == 'push' || inputs.mode == 'deploy_current')
+        run: |
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$(git rev-parse HEAD)"
+          mkdir "$RUNNER_TEMP/pages"
+          cp -- index.html data.enc robots.txt .nojekyll "$RUNNER_TEMP/pages/"
+          echo "deploy=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.pages.outputs.deploy == 'true'
+        with:
+          path: ${{ runner.temp }}/pages
+
+  deploy:
+    if: needs.refresh.outputs.deploy == 'true'
+    needs: refresh
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Опубликовать сайт
+        id: deploy
+        uses: actions/deploy-pages@v4

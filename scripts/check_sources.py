@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -102,15 +103,19 @@ def main():
     if args.output.resolve().is_relative_to(root):
         parser.error("Keep the review file outside the repository.")
     try:
-        from google.auth import default
+        from google.auth import default, load_credentials_from_dict
         from google.auth.transport.requests import AuthorizedSession
     except ImportError:
         parser.exit(1, "Install the dependencies from requirements.txt.\n")
 
-    secret = password()
-    previous = decrypt(load(args.state), secret)
-    credentials, _ = default(scopes=SCOPES)
     try:
+        secret = password()
+        previous = decrypt(load(args.state), secret)
+        credential_json = os.environ.get("MIA_GOOGLE_CREDENTIALS")
+        if credential_json:
+            credentials, _ = load_credentials_from_dict(json.loads(credential_json), scopes=SCOPES)
+        else:
+            credentials, _ = default(scopes=SCOPES)
         with AuthorizedSession(credentials) as session, TemporaryDirectory(prefix="mia-source-") as temporary:
             directory = Path(temporary)
             collect(session, previous, directory)
