@@ -36,10 +36,17 @@ def write_json(path, value):
     path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
 
 
-def get(session, url, params):
+class SourceReadError(ValueError):
+    """An API failure identified by a public source key and HTTP status."""
+
+    def __init__(self, source, status):
+        super().__init__(f"Источник {source}: Google API вернул HTTP {status}.")
+
+
+def get(session, source, url, params):
     response = session.get(url, params=params, timeout=60)
     if not response.ok:
-        raise ValueError(f"Google API HTTP {response.status_code}")
+        raise SourceReadError(source, response.status_code)
     return response
 
 
@@ -50,7 +57,7 @@ def collect(session, previous, directory):
         if not source_id or not all(c.isascii() and (c.isalnum() or c in "_-") for c in source_id):
             raise ValueError("Invalid Google file ID in source state.")
         file_url = f"{DRIVE}/{source_id}"
-        before = get(session, file_url, {"fields": FILE_FIELDS, "supportsAllDrives": "true"}).json()
+        before = get(session, source, file_url, {"fields": FILE_FIELDS, "supportsAllDrives": "true"}).json()
         expected_mime = WORKBOOK if source == "vas" else NATIVE
         if before["id"] != source_id or before["mimeType"] != expected_mime or not before.get("modifiedTime"):
             raise ValueError(f"Unexpected source metadata: {source}")
@@ -60,11 +67,11 @@ def collect(session, previous, directory):
             "size": before.get("size"),
         }}
         if source == "vas":
-            workbook = get(session, file_url, {"alt": "media", "supportsAllDrives": "true"})
+            workbook = get(session, source, file_url, {"alt": "media", "supportsAllDrives": "true"})
             (directory / "vas.xlsx").write_bytes(workbook.content)
         else:
             spreadsheet_url = f"{SHEETS}/{source_id}"
-            tabs = get(session, spreadsheet_url, {
+            tabs = get(session, source, spreadsheet_url, {
                 "fields": "spreadsheetId,spreadsheetUrl,sheets(properties(title,sheetId,hidden,gridProperties))",
             }).json()
             metadata[source]["sheets"] = tabs
@@ -75,7 +82,7 @@ def collect(session, previous, directory):
                 if grid["columnCount"] < ord(column) - ord("A") + 1:
                     raise ValueError(f"Source has fewer columns than expected: {source}")
                 quoted = "'" + title.replace("'", "''") + "'"
-                values = get(session, f"{spreadsheet_url}/values:batchGet", {
+                values = get(session, source, f"{spreadsheet_url}/values:batchGet", {
                     "ranges": f"{quoted}!A1:{column}{grid['rowCount']}",
                     "valueRenderOption": "UNFORMATTED_VALUE",
                 }).json()
@@ -83,12 +90,12 @@ def collect(session, previous, directory):
                 if not rows:
                     raise ValueError(f"Source tab is empty: {source}")
                 ranges.append(f"{quoted}!A1:{column}{len(rows)}")
-            cells = get(session, spreadsheet_url, {"ranges": ranges, "fields": GRID_FIELDS}).json()
+            cells = get(session, source, spreadsheet_url, {"ranges": ranges, "fields": GRID_FIELDS}).json()
             if {tab["properties"]["title"] for tab in cells["sheets"]} != set(titles):
                 raise ValueError(f"Incomplete cell response: {source}")
             write_json(directory / f"{source}_cells.json", cells)
 
-        after = get(session, file_url, {"fields": FILE_FIELDS, "supportsAllDrives": "true"}).json()
+        after = get(session, source, file_url, {"fields": FILE_FIELDS, "supportsAllDrives": "true"}).json()
         if before["modifiedTime"] != after.get("modifiedTime"):
             raise ValueError(f"Source changed during the read: {source}")
     write_json(directory / "metadata.json", metadata)
@@ -126,6 +133,8 @@ def main():
             "previous_pending_changes": previous.get("pending_changes", []),
         }
         save(args.output, encrypt(review, secret, compress=True), plaintext=False)
+    except SourceReadError as exc:
+        parser.exit(1, f"{exc}\n")
     except Exception as exc:
         # Google errors can contain private spreadsheet links or values.
         parser.exit(1, f"Source check failed ({type(exc).__name__}).\n")
