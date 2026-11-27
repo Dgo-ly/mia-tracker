@@ -39,14 +39,27 @@ def write_json(path, value):
 class SourceReadError(ValueError):
     """An API failure identified by a public source key and HTTP status."""
 
-    def __init__(self, source, status):
-        super().__init__(f"Источник {source}: Google API вернул HTTP {status}.")
+    def __init__(self, source, api, status, reason):
+        super().__init__(f"Источник {source}: {api} вернул HTTP {status} ({reason}).")
 
 
 def get(session, source, url, params):
     response = session.get(url, params=params, timeout=60)
     if not response.ok:
-        raise SourceReadError(source, response.status_code)
+        known_reasons = {
+            "SERVICE_DISABLED", "accessNotConfigured", "ACCESS_TOKEN_SCOPE_INSUFFICIENT",
+            "PERMISSION_DENIED", "forbidden", "insufficientPermissions", "notFound",
+            "CONSUMER_INVALID", "BILLING_DISABLED", "rateLimitExceeded", "quotaExceeded",
+        }
+        try:
+            error = response.json().get("error", {})
+            details = error.get("details", []) + error.get("errors", [])
+        except (AttributeError, TypeError, ValueError):
+            details = []
+        reason = next((part.get("reason") for part in details
+                       if isinstance(part, dict) and part.get("reason") in known_reasons), "unknown")
+        api = "Google Drive API" if url.startswith(DRIVE) else "Google Sheets API"
+        raise SourceReadError(source, api, response.status_code, reason)
     return response
 
 
