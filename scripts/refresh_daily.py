@@ -17,8 +17,6 @@ from tracker import decrypt, digest, encrypt, index, load, prepare, save
 from validate_data import compare_accounting, validate
 
 
-# These sources use the shared text rules without a separate colour/UPD override.
-TEXT_SOURCES = {"msk", "lig"}
 TEXT_RULES = {
     "problem_keyword", "explicit_missing_document_list", "partial_keyword",
     "advance_keyword", "closed_keyword", "sent_keyword", "requested_keyword",
@@ -48,7 +46,7 @@ def automatic_patch(baseline, previous, current, comparison):
     for change in comparison["changes"]:
         source = change["source"]
         key = change["supplier_key"]
-        if (source not in TEXT_SOURCES or source not in clinics
+        if (source not in clinics
                 or change["requires_review"] or change["changed_fields"] != ["comments"]
                 or old_names[source][key] != 1 or current_names[source][key] != 1):
             unresolved += 1
@@ -61,11 +59,12 @@ def automatic_patch(baseline, previous, current, comparison):
                 or row["c"] != before["comments"][0]
                 or len(after["comments"]) != 1 or not after["comments"][0]
                 or before.get("include_supplier_scope") is False
+                or before.get("overpayment_flag")
                 or change["tab"] not in row["tabs"]):
             unresolved += 1
             continue
-        old_status = classify_status(row["c"], explicit_missing_documents=True)
-        new_status = classify_status(after["comments"][0], explicit_missing_documents=True)
+        old_status = classify_status(row["c"], clinic_kind=source, explicit_missing_documents=True)
+        new_status = classify_status(after["comments"][0], clinic_kind=source, explicit_missing_documents=True)
         if (old_status.status != row["s"] or old_status.rule not in TEXT_RULES
                 or new_status.rule not in TEXT_RULES or new_status.status not in allowed):
             unresolved += 1
